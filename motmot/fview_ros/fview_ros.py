@@ -2,6 +2,7 @@ from __future__ import with_statement, division
 
 import pkg_resources
 import warnings, threading
+import subprocess
 try:
     import enthought.traits.api as traits
     from enthought.traits.ui.api import View, Item, Group
@@ -41,6 +42,10 @@ class FviewROS(traited_plugin.HasTraits_FViewPlugin):
     def __init__(self,*args,**kwargs):
         super( FviewROS, self).__init__(*args,**kwargs)
         if have_ROS:
+
+            if not subprocess.Popen(['rosnode', 'list'], stdout=subprocess.PIPE).communicate()[0]:
+                raise IOError, 'ROS master not running'
+
             rospy.init_node('fview', # common name across all plugins so multiple calls to init_node() don't fail
                             anonymous=True, # allow multiple instances to run
                             disable_signals=True, # let WX intercept them
