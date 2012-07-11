@@ -2,7 +2,11 @@ from __future__ import with_statement, division
 
 import pkg_resources
 import warnings, threading
+import os
 import subprocess
+import time
+import atexit
+
 try:
     import enthought.traits.api as traits
     from enthought.traits.ui.api import View, Item, Group
@@ -41,10 +45,16 @@ class FviewROS(traited_plugin.HasTraits_FViewPlugin):
 
     def __init__(self,*args,**kwargs):
         super( FviewROS, self).__init__(*args,**kwargs)
-        if have_ROS:
 
-            if not subprocess.Popen(['rosnode', 'list'], stdout=subprocess.PIPE).communicate()[0]:
-                raise IOError, 'ROS master not running'
+        self.roscore_popen = None
+        atexit.register(self.cleanup)
+
+        if have_ROS:
+            # If roscore is not running start it 
+            if not roscore_running(): 
+                self.roscore_popen = subprocess.Popen(['roscore'],stdout=subprocess.PIPE)
+                while not roscore_running():
+                    time.sleep(0.5)
 
             rospy.init_node('fview', # common name across all plugins so multiple calls to init_node() don't fail
                             anonymous=True, # allow multiple instances to run
@@ -59,6 +69,13 @@ class FviewROS(traited_plugin.HasTraits_FViewPlugin):
                                                          sensor_msgs.srv.SetCameraInfo,
                                                          self.handle_set_camera_info)
         self._topic_prefix_changed()
+
+    def cleanup(self):
+        # If we started roscore using popen close it.
+        if self.roscore_popen is not None:
+            self.roscore_popen.send_signal(subprocess.signal.SIGINT)
+            self.roscore_popen.wait()
+
 
     def _topic_prefix_changed(self):
         with self.publisher_lock:
@@ -134,3 +151,21 @@ class FviewROS(traited_plugin.HasTraits_FViewPlugin):
                 self.publisher.publish(msg)
                 self.publisher_cam_info.publish(cam_info)
         return [],[]
+
+def roscore_running(): 
+    """
+    Checks to see if ROS core is running. This is a bit kludgey as I just uses popen
+    to call the rosnode command line function. If is fails than it is assumed that 
+    ROS core isn't running.
+    """
+    devnull = open(os.devnull, 'w')
+    rosnode_popen = subprocess.Popen(
+            ['rosnode', 'list'], 
+            stdout=subprocess.PIPE, 
+            stderr=devnull
+            )
+    rsp = rosnode_popen.communicate()[0]
+    if not rsp:
+        return False
+    else:
+        return True
