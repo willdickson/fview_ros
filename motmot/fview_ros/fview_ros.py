@@ -60,6 +60,10 @@ class FviewROS(traited_plugin.HasTraits_FViewPlugin):
                             anonymous=True, # allow multiple instances to run
                             disable_signals=True, # let WX intercept them
                             )
+        else:
+            raise RuntimeError, 'ROS not available'
+
+
         self.publisher_lock = threading.Lock()
         self.publisher = None
         self.publisher_cam_info = None
